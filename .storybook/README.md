@@ -177,9 +177,13 @@ beforeEach: ({ msw }) => msw.use(connectionList.error),
 ## Convex backend in stories
 
 Convex talks over a websocket that MSW cannot intercept, and stories don't
-need one: `storyFrame.ts` calls `convexStory(story)` inside the story's frame
-and puts the result in `backendAtom`, where `main.tsx` puts the real backend.
-The fakes are a client from `@reatomized/convex/testing` whose functions are
+need one. The app reads its client and auth state from `backendAtom`
+(`src/shared/api/backend.ts`), which `main.tsx` sets to the real backend at
+startup. It is the app's counterpart of `<ConvexProvider client>`, not a story
+hook. `storyFrame.ts` already starts each story's Reatom frame for the router
+and persisted atoms; inside it, one line sets the same atom to
+`fakeBackend(convexStory(story), authProvider)`. Stories touch neither. The
+fakes are a client from `@reatomized/convex/testing` whose functions are
 handlers, an auth library that signs in as `parameters.convex.identity`, and
 the real `reatomAuthState` over both.
 
@@ -195,10 +199,11 @@ type, and assert visible headings, messages, and lists. For example, the access
 gate test clicks `Approve: alex@example.com` and asserts that Alex appears under
 Approved. It does not read atoms or call app actions directly.
 
-Actor-only tests need no frame wrapper. `inStoryFrame` is an internal helper
-only for infrastructure tests that read or write atoms, such as injecting a
-connection change that has no UI control. Authentication journeys use the
-sign-in and sign-out UI. Model and atom assertions belong in unit tests.
+Authentication journeys use the sign-in and sign-out UI. Model and atom
+assertions belong in unit tests. The one exception is an event the UI can't
+cause, such as a dropped connection: `Sync.stories.tsx` injects it through
+`inStoryFrame` from `storyFrame.ts`, an internal helper that is not part of
+`@reatomized/convex-storybook`.
 
 A function without a handler fails the story, even when the app catches the
 error and renders something plausible.
