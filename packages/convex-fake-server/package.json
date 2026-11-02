@@ -7,9 +7,9 @@
 		".": "./src/fakeConvexServer.ts"
 	},
 	"devDependencies": {
-		"convex": "1.48.0"
+		"convex": "1.49.0"
 	},
 	"peerDependencies": {
-		"convex": "^1.48.0"
+		"convex": "^1.49.0"
 	}
 }

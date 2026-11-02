@@ -204,14 +204,18 @@ description = "Run tests in watch mode"
 alias = "t"
 run = "nub exec vp test"
 
+# The logger writes every atom change with a stack trace, enough to time out
+# stories; mise.local.toml turns it on for development.
 [tasks."test:run"]
 description = "Run tests once"
 alias = "tr"
+env = { VITE_CONNECT_LOGGER = "false" }
 run = "nub exec vp test run"
 
 [tasks."test:coverage"]
 description = "Run tests with coverage"
 alias = "tcov"
+env = { VITE_CONNECT_LOGGER = "false" }
 run = "nub exec vp test run --coverage"
 
 [tasks.format]

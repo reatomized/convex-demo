@@ -1,25 +1,32 @@
-import { assert, atom } from '@reatom/core'
-import { ConvexClient } from 'convex/browser'
-import { reatomConvex } from 'reatom-convex'
+import type { Credentials } from './auth/types'
+import type { ReatomAuthState, ReatomConvexClient } from '@reatomized/convex'
 
-import { createBetterAuthClient } from './auth/betterAuth'
-import { createConvexAuthTransport } from './auth/convexAuth'
+import { assert, atom, type AtomLike } from '@reatom/core'
 
-// Read lazily: stories and tests set fakes into these atoms before first use.
-const env = (key: 'VITE_CONVEX_URL' | 'VITE_CONVEX_SITE_URL') => {
-	const value: unknown = import.meta.env[key]
-	assert(typeof value === 'string' && value, `${key} is not set; run \`mise run convex:dev\``)
-	return value
+/** The user an auth library holds a session for. */
+export type SessionUser = { email: string }
+
+/** Email and password accounts of the selected auth library. */
+export type Accounts = {
+	/** The library's signed-in user, before the backend accepts its token. */
+	readonly user: AtomLike<SessionUser | null, []>
+	readonly signIn: (credentials: Credentials) => Promise<void>
+	readonly signUp: (credentials: Credentials) => Promise<void>
+	readonly signOut: () => Promise<void>
 }
 
-export const convex = reatomConvex(() => new ConvexClient(env('VITE_CONVEX_URL')), 'convex')
+/** The Convex client, the session the backend accepted, and the accounts behind it. */
+export type Backend = {
+	readonly convex: ReatomConvexClient
+	readonly auth: ReatomAuthState
+	readonly accounts: Accounts
+}
 
-export const convexAuthTransport = atom(
-	() => createConvexAuthTransport(env('VITE_CONVEX_URL')),
-	'convexAuthTransport',
-)
+/** `main.tsx` installs the deployment's backend at startup; stories install a fake. */
+export const backendAtom = atom<Backend | null>(null, 'backend')
 
-export const betterAuthClient = atom(
-	() => createBetterAuthClient(env('VITE_CONVEX_SITE_URL')),
-	'betterAuthClient',
-)
+export const backend = (): Backend => {
+	const current = backendAtom()
+	assert(current, 'No backend: main.tsx installs one at startup, a story through convexStory')
+	return current
+}

@@ -5,7 +5,8 @@ import { expect, test } from 'vite-plus/test'
 import { api } from './_generated/api'
 import schema from './schema'
 
-const modules = import.meta.glob('./**/*.ts')
+// The functions only: a test globbing the other tests would import them.
+const modules = import.meta.glob(['./**/*.ts', '!./**/*.test.ts'])
 const firstPage = { paginationOpts: { numItems: 10, cursor: null } }
 
 const convexAuthUser = (session: string) => ({

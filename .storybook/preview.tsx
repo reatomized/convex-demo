@@ -3,7 +3,12 @@ import '../src/setup'
 
 import '../src/index.css'
 
+import type { ConvexStorybookParameters } from '@reatomized/convex-storybook'
+import type { PreviewAddon } from 'storybook/internal/csf'
+
+import { type RootFrame } from '@reatom/core'
 import { reatomContext } from '@reatom/react'
+import convexStorybook from '@reatomized/convex-storybook'
 import addonA11y from '@storybook/addon-a11y'
 import { definePreview } from '@storybook/react-vite'
 import { configureDiagnostics } from 'kahraman/preview'
@@ -12,27 +17,13 @@ import { setupWorker } from 'msw/browser'
 
 import { clearAbortErrors, drainAbortErrors, formatAbortErrors } from './abortErrorGuard'
 // oxlint-disable-next-line no-restricted-imports
-import { useEffect, useMemo, type PropsWithChildren } from 'react'
+import { useEffect, type PropsWithChildren } from 'react'
 
 import { handlersArray } from '#app/mocks/handlers'
-import { authProvider } from '#entities/session'
-import {
-	betterAuthClient,
-	convex,
-	type AuthProviderId,
-	convexAuthStorageKeys,
-	convexAuthTransport,
-	createBetterAuthClient,
-} from '#shared/api'
-import {
-	createFakeConvexBackend,
-	FAKE_CONVEX_SITE_URL,
-	fakeBetterAuthHandlers,
-	fakeConvexBackend,
-} from '#shared/mocks/convexBackend'
+import { ALEX, deployment, storyIdentity } from '#shared/mocks/convexDeployment'
 import { css } from '#styled-system/css'
 
-import { setupStorybookUrl } from './setupStorybookUrl'
+import { storyFrame, storyFrameAddon } from './storyFrame'
 import { FALLBACK_VIEWPORT, getViewportSize } from './viewports'
 
 // Storybook 10.5's test preview replaces `HTMLElement.prototype.focus` with an
@@ -49,7 +40,7 @@ const nativeHTMLElementFocus = globalThis.HTMLElement
 // — every story gets the full route set mocked by default, with individual
 // routes overridable via `msw.use(...)` in a story's `beforeEach`.
 async function setupMswWorker() {
-	const worker = setupWorker(...handlersArray, ...fakeBetterAuthHandlers)
+	const worker = setupWorker(...handlersArray)
 	await worker.start({
 		onUnhandledRequest: 'bypass',
 		quiet: true,
@@ -60,87 +51,25 @@ async function setupMswWorker() {
 	return worker
 }
 
-const NO_NOTES: string[] = []
-const SEEDED_USER = { email: 'alex@example.com', password: 'correct-horse' }
-const convexAuthKeys = convexAuthStorageKeys('convexAuth')
-// Auth state persisted by the adapters; each story gets a new fake backend.
-const AUTH_STORAGE_KEYS = [
-	convexAuthKeys.token,
-	convexAuthKeys.refreshToken,
-	'better-auth_cookie',
-	'better-auth_session_data',
-	'authProvider',
-]
-
-// A fresh in-memory Convex deployment per story. `authenticated` stories
-// start with a restored Convex Auth session, as after a page reload.
-const startFakeBackend = (authenticated: boolean, seedNotes: string[]) => {
-	AUTH_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key))
-	const backend = createFakeConvexBackend()
-	fakeConvexBackend.current = backend
-	if (authenticated) {
-		const tokens = backend.seedConvexAuthSession(SEEDED_USER.email, SEEDED_USER.password)
-		window.localStorage.setItem(convexAuthKeys.token, tokens.token)
-		window.localStorage.setItem(convexAuthKeys.refreshToken, tokens.refreshToken)
-		backend.seedNotes(SEEDED_USER.email, seedNotes)
-	}
-	return backend
-}
-
-function ReatomDecorator({
-	children,
-	initialPath = '',
-	authenticated = true,
-	seedNotes = NO_NOTES,
-	provider,
-}: PropsWithChildren<{
-	authenticated?: boolean
-	seedNotes?: string[]
-	initialPath?: string
-	provider?: AuthProviderId
-}>) {
-	const frame = useMemo(() => {
-		// localStorage is shared across stories on the same origin. Atoms backed
-		// by withLocalStorage (theme, locale, top-bar toggles, auth) would otherwise
-		// inherit state a previous story persisted. Reset to defaults in test runs
-		// before the fresh frame reads them.
-		if ((globalThis as Record<string, unknown>)['__vitest_worker__']) {
-			window.localStorage.clear()
-		}
-		const backend = startFakeBackend(authenticated, seedNotes)
-		const client = backend.createClient()
-		const storyFrame = setupStorybookUrl(initialPath, () => {
-			convex.client.set(client)
-			convexAuthTransport.set(backend.convexAuth)
-			betterAuthClient.set(createBetterAuthClient(FAKE_CONVEX_SITE_URL))
-			if (provider) authProvider.set(provider)
-		})
-		return { storyFrame, client, backend }
-	}, [authenticated, initialPath, provider, seedNotes])
-
+function ReatomDecorator({ children, frame }: PropsWithChildren<{ frame: RootFrame }>) {
 	useEffect(() => {
 		return () => {
-			// The client reconnects on its own until closed.
-			void frame.client.close()
-			frame.backend.server.close()
 			clearAbortErrors()
 			queueMicrotask(clearAbortErrors)
 		}
 	}, [frame])
 
-	return <reatomContext.Provider value={frame.storyFrame}>{children}</reatomContext.Provider>
+	return <reatomContext.Provider value={frame}>{children}</reatomContext.Provider>
 }
 
+// Name the addon's public parameter type for TypeScript composite-project inference.
+const convexAddon: PreviewAddon<{ parameters: ConvexStorybookParameters }> = convexStorybook()
+
 const preview = definePreview({
-	addons: [addonA11y(), addonMsw(setupMswWorker)],
+	addons: [addonA11y(), addonMsw(setupMswWorker), convexAddon, storyFrameAddon],
 	decorators: [
-		(Story, { parameters }) => (
-			<ReatomDecorator
-				authenticated={parameters['authenticated']}
-				seedNotes={parameters['seedNotes']}
-				initialPath={parameters['initialPath']}
-				provider={parameters['authProvider']}
-			>
+		(Story, story) => (
+			<ReatomDecorator frame={storyFrame(story)}>
 				<Story />
 			</ReatomDecorator>
 		),
@@ -152,6 +81,8 @@ const preview = definePreview({
 	],
 	parameters: {
 		a11y: { test: 'todo' },
+		// Stories start signed in with ALEX's restored Convex Auth session.
+		convex: { identity: storyIdentity('convex-auth', ALEX.email), setup: deployment() },
 	},
 	// fallow-ignore-next-line complexity
 	beforeEach: async ({ globals, parameters }) => {

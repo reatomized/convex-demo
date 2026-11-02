@@ -11,19 +11,19 @@ This file is the local contract; kahraman is the upstream rationale.
 
 ## Where things live
 
-| Kind                               | Location                                                                                |
-| ---------------------------------- | --------------------------------------------------------------------------------------- |
-| Integration stories                | `src/app/integration/*.stories.tsx`                                                     |
-| Page actors (domain vocabulary)    | `src/pages/<page>/testing.ts`                                                           |
-| Reusable actor extensions          | `src/shared/test/pageActor.ts`                                                          |
-| Actor factory + locator re-exports | `src/shared/test/index.ts`                                                              |
-| Low-level test mechanics           | `src/shared/test/routeFetchAbortProbe.ts`, `abortErrorGuard.ts`, `setupStorybookUrl.ts` |
-| Per-entity MSW handlers            | `src/entities/<entity>/mocks/handlers.ts`                                               |
-| Global handler aggregate           | `src/app/mocks/handlers.ts`                                                             |
-| Fake Convex deployment             | `src/shared/mocks/convexBackend.ts`                                                     |
-| Mock error/timing helpers          | `src/shared/mocks/utils.ts` (`to500`, `neverResolve`, `withRetrySuccess`, `Error404`)   |
-| Viewport map                       | `.storybook/viewports.ts`                                                               |
-| Preview wiring                     | `.storybook/preview.tsx`                                                                |
+| Kind                               | Location                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| Integration stories                | `src/app/integration/*.stories.tsx`                                                   |
+| Page actors (domain vocabulary)    | `src/pages/<page>/testing.ts`                                                         |
+| Reusable actor extensions          | `src/shared/test/pageActor.ts`                                                        |
+| Actor factory + locator re-exports | `src/shared/test/index.ts`                                                            |
+| Low-level test mechanics           | `src/shared/test/routeFetchAbortProbe.ts`, `abortErrorGuard.ts`, `storyFrame.ts`      |
+| Per-entity MSW handlers            | `src/entities/<entity>/mocks/handlers.ts`                                             |
+| Global handler aggregate           | `src/app/mocks/handlers.ts`                                                           |
+| Fake Convex deployment             | `src/shared/mocks/convexDeployment.ts`                                                |
+| Mock error/timing helpers          | `src/shared/mocks/utils.ts` (`to500`, `neverResolve`, `withRetrySuccess`, `Error404`) |
+| Viewport map                       | `.storybook/viewports.ts`                                                             |
+| Preview wiring                     | `.storybook/preview.tsx`                                                              |
 
 The boundary: **page actors and `pageActor.ts` hold reusable page mechanics and
 expectations named in domain language** (`seeConnectionList`, `openEdit`,
@@ -69,11 +69,15 @@ canvas, `userEvent`, and a fresh step trace. Register tests with
 
 Story-level parameters this project understands:
 
-- `initialPath` — path the router boots at (`setupStorybookUrl`).
-- `authenticated` — defaults to `true`, which boots with a restored Convex Auth
-  session for `alex@example.com`; set `false` to boot signed out.
+- `initialPath` — path the router boots at (`storyFrame.ts`).
 - `authProvider` — `'convex-auth'` or `'better-auth'`, the provider selected
   on the sign-in page.
+- `convex` — the story's Convex fakes (`@reatomized/convex-storybook`):
+  `auth` (`'authenticated'` by default, `'unauthenticated'`, `'loading'`,
+  `'rejected'`), `identity` (who is signed in, `alex@example.com` with Convex
+  Auth by default) and `setup` (the handlers, `deployment()` by default).
+  Storybook merges it per key, so a story can change `auth` and keep the
+  preview's `setup`.
 
 MSW overrides are not parameters: CSF Next ignores `parameters.msw`, so a story
 calls `msw.use(...)` in its `beforeEach` (see below).
@@ -172,20 +176,37 @@ beforeEach: ({ msw }) => msw.use(connectionList.error),
 
 ## Convex backend in stories
 
-Convex talks over a websocket that MSW cannot intercept, so each story gets an
-in-memory deployment (`src/shared/mocks/convexBackend.ts`) on a server that
-speaks Convex's websocket protocol (`packages/convex-fake-server`). The decorator puts
-a real `ConvexClient` connected to it into `convex.client`, plus
-`convexAuthTransport` and `betterAuthClient`, and closes the client when the
-story unmounts. better-auth still runs its real client: its HTTP endpoints are
-MSW handlers (`fakeBetterAuthHandlers`) backed by the same fake. The
-`seedNotes` parameter adds notes for the restored account.
+Convex talks over a websocket that MSW cannot intercept, and stories don't
+need one. The app reads its client and auth state from `backendAtom`
+(`src/shared/api/backend.ts`), which `main.tsx` sets to the real backend at
+startup. It is the app's counterpart of `<ConvexProvider client>`, not a story
+hook. `storyFrame.ts` already starts each story's Reatom frame for the router
+and persisted atoms; inside it, one line sets the same atom to
+`fakeBackend(convexStory(story), authProvider)`. Stories touch neither. The
+fakes are a client from `@reatomized/convex/testing` whose functions are
+handlers, an auth library that signs in as `parameters.convex.identity`, and
+the real `reatomAuthState` over both.
 
-Assert on backend state that has no UI through `fakeConvexBackend.current`, for
-example `subscriptionCount('notes:list')` to prove a private query is not
-subscribed. Drive server-side events through `fakeConvexBackend.current.server`:
-`setOnline(false)` drops the connection, `expireAuth()` rejects the current
-token so the client refreshes it.
+`deployment(seed)` in `src/shared/mocks/convexDeployment.ts` is the default
+`setup`: accounts and notes in atoms, and handlers for `viewer.current`,
+`notes.list` and `notes.add` that scope notes by `ctx.identity` like the
+server does. Pass `deployment({ notes: [...] })` to seed notes, or compose it
+with more handlers, as `Access.stories.tsx` does for the team space. Atom state
+is per frame, so every story starts from its own seed.
+
+Story tests normally stay at the UI boundary. Use Kahraman actors to click,
+type, and assert visible headings, messages, and lists. For example, the access
+gate test clicks `Approve: alex@example.com` and asserts that Alex appears under
+Approved. It does not read atoms or call app actions directly.
+
+Authentication journeys use the sign-in and sign-out UI. Model and atom
+assertions belong in unit tests. The one exception is an event the UI can't
+cause, such as a dropped connection: `Sync.stories.tsx` injects it through
+`inStoryFrame` from `storyFrame.ts`, an internal helper that is not part of
+`@reatomized/convex-storybook`.
+
+A function without a handler fails the story, even when the app catches the
+error and renders something plausible.
 
 Model distinct meaningful states (success / error / persistent-loading / retry).
 Don't add a state variant that doesn't exercise real behavior.
@@ -216,15 +237,14 @@ so manual Storybook rendering is untouched.
 
 ## Preview wiring worth knowing (`preview.tsx`)
 
-- **Reatom frame** — a decorator provides `reatomContext.Provider`, boots the
-  router at `initialPath` via `setupStorybookUrl`, and wires a fresh fake Convex
-  backend into the frame. `useMemo` keys a fresh frame on
-  `[authenticated, initialPath, provider]`.
-- **Persisted-state reset** — under `__vitest_worker__` the decorator calls
+- **Reatom frame** — `storyFrameAddon`'s loader starts a frame per render,
+  installs the story's Convex fakes in it and boots the router at
+  `initialPath`; a rerender after a control change keeps the frame. A
+  decorator provides it through `reatomContext.Provider`.
+- **Persisted-state reset** — under `__vitest_worker__` the frame loader calls
   `window.localStorage.clear()` so `withLocalStorage` atoms (theme, locale,
-  top-bar toggles) don't leak state between stories on the shared origin. Auth
-  storage keys are removed for every story, manual Storybook included, because
-  each story's fake backend starts empty.
+  top-bar toggles, the auth provider) don't leak state between stories on the
+  shared origin.
 - **Abort guard** (`abortErrorGuard.ts`) — the `beforeEach` teardown drains
   Reatom `AbortError`s and **throws** if any leaked during a story; the decorator
   clears them on unmount. A story that leaks an abort will fail loudly.

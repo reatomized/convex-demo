@@ -20,6 +20,44 @@ import type { GenericId as Id } from "convex/values";
  * ```
  */
 export declare const api: {
+  access: {
+    approve: FunctionReference<
+      "mutation",
+      "public",
+      { memberId: Id<"members"> },
+      null
+    >;
+    members: FunctionReference<
+      "query",
+      "public",
+      {},
+      {
+        approved: Array<{
+          _creationTime: number;
+          _id: Id<"members">;
+          email: string;
+        }>;
+        pending: Array<{
+          _creationTime: number;
+          _id: Id<"members">;
+          email: string;
+        }>;
+      }
+    >;
+    requestAccess: FunctionReference<"mutation", "public", {}, null>;
+    revoke: FunctionReference<
+      "mutation",
+      "public",
+      { memberId: Id<"members"> },
+      null
+    >;
+    viewer: FunctionReference<
+      "query",
+      "public",
+      {},
+      "admin" | "approved" | "pending" | null
+    >;
+  };
   auth: {
     isAuthenticated: FunctionReference<"query", "public", {}, any>;
     signIn: FunctionReference<

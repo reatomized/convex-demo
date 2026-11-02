@@ -1,76 +1,43 @@
-import {
-	action,
-	computed,
-	effect,
-	reatomEnum,
-	withConnectHook,
-	withLocalStorage,
-	wrap,
-} from '@reatom/core'
+import { action, computed, reatomEnum, withLocalStorage, wrap } from '@reatom/core'
 
-import {
-	AUTH_PROVIDERS,
-	betterAuthClient,
-	convex,
-	convexAuthTransport,
-	reatomBetterAuthAdapter,
-	reatomConvexAuthAdapter,
-	type AuthAdapter,
-	type AuthProviderId,
-	type Credentials,
-} from '#shared/api'
+import { AUTH_PROVIDERS, backend, type Credentials } from '#shared/api'
 
-const adapters = {
-	'convex-auth': reatomConvexAuthAdapter(convexAuthTransport, 'convexAuth'),
-	'better-auth': reatomBetterAuthAdapter(betterAuthClient, 'betterAuth'),
-} satisfies Record<AuthProviderId, AuthAdapter>
-
+/** The auth library the sign-in page uses; the backend's session follows it. */
 export const authProvider = reatomEnum(AUTH_PROVIDERS, 'authProvider').extend(
 	withLocalStorage('authProvider'),
 )
 
-const activeAdapter = computed(() => adapters[authProvider()], 'activeAdapter')
-
-export const sessionUser = computed(() => activeAdapter().user(), 'sessionUser')
-
-// Changes only when the signed-in identity does, not on every session refetch.
-const sessionKey = computed(() => {
-	const user = sessionUser()
-	return user ? `${activeAdapter().id}:${user.email}` : null
-}, 'sessionKey')
+/** The signed-in user per the auth library, before the backend accepts its token. */
+export const sessionUser = computed(() => backend().accounts.user(), 'sessionUser')
 
 type SessionStatus = 'signedOut' | 'authenticating' | 'authenticated' | 'rejected'
+
+const STATUSES = {
+	loading: 'authenticating',
+	unauthenticated: 'signedOut',
+	authenticated: 'authenticated',
+	rejected: 'rejected',
+} as const
 
 /**
  * Two-phase session: the auth library holds a session (`sessionUser`), then
  * the Convex backend accepts or rejects its token. Only `authenticated` may
- * render private data.
+ * render private data. Reading it keeps the client's auth in step with the
+ * library.
  */
-export const sessionStatus = computed((): SessionStatus => {
-	if (!sessionUser()) return 'signedOut'
-	const accepted = convex.serverAuthenticated()
-	if (accepted === null) return 'authenticating'
-	return accepted ? 'authenticated' : 'rejected'
-}, 'sessionStatus').extend(
-	// Hands the active library's token to Convex while the app observes the session.
-	withConnectHook(
-		() =>
-			effect(() => {
-				const adapter = activeAdapter()
-				if (sessionKey()) convex.setAuth(adapter.fetchToken)
-				else convex.clearAuth()
-			}, 'sessionStatus.syncConvexAuth').unsubscribe,
-	),
+export const sessionStatus = computed(
+	(): SessionStatus => STATUSES[backend().auth.status()],
+	'sessionStatus',
 )
 
 export const signIn = action(async (credentials: Credentials) => {
-	await wrap(activeAdapter().signIn(credentials))
+	await wrap(backend().accounts.signIn(credentials))
 }, 'session.signIn')
 
 export const signUp = action(async (credentials: Credentials) => {
-	await wrap(activeAdapter().signUp(credentials))
+	await wrap(backend().accounts.signUp(credentials))
 }, 'session.signUp')
 
 export const signOut = action(async () => {
-	await wrap(activeAdapter().signOut())
+	await wrap(backend().accounts.signOut())
 }, 'session.signOut')

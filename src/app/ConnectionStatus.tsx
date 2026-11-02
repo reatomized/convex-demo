@@ -1,11 +1,12 @@
 import { reatomComponent } from '@reatom/react'
 
 import { m } from '#paraglide/messages.js'
-import { convex } from '#shared/api'
+import { backend } from '#shared/api'
 import { styled } from '#styled-system/jsx'
 
 // A token refresh stops the socket too, so it takes precedence.
 export const ConnectionStatus = reatomComponent(() => {
+	const { convex } = backend()
 	const { hasEverConnected, isWebSocketConnected } = convex.connectionState()
 	const message = convex.isRefreshingAuth()
 		? m.session_refreshing()
