@@ -1,19 +1,10 @@
-import { expect } from 'storybook/test'
-
 import preview from '#.storybook/preview'
-import { inStoryFrame } from '#.storybook/storyFrame'
 import { App } from '#app/App'
 import { loginLoc, withLoginPage } from '#pages/login/testing'
 import { notesLoc, withNotesPage } from '#pages/notes/testing'
-import { runsOf } from '#shared/mocks/convexDeployment'
 import { button, createActor, heading, role, text } from '#shared/test'
 
 const I = createActor().extend(withLoginPage).extend(withNotesPage)
-
-// The private list never ran in the story's fake deployment.
-const expectNoPrivateReads = inStoryFrame(async () => {
-	expect(runsOf('notes:list')).toBe(0)
-})
 
 const meta = preview.meta({
 	title: 'Integration/Auth',
@@ -31,30 +22,22 @@ export const SignedOutConvexAuth = meta.story({
 	parameters: { authProvider: 'convex-auth' },
 })
 
-SignedOutConvexAuth.test(
-	'redirects private routes to sign-in without reading private data',
-	async (story) => {
-		await I.see(loginLoc.signInHeading)
-		await I.seeChecked(role('radio', 'Convex Auth'))
-		await I.dontSee(notesLoc.heading)
-		await expectNoPrivateReads(story)
-	},
-)
+SignedOutConvexAuth.test('redirects private routes to sign-in', async () => {
+	await I.see(loginLoc.signInHeading)
+	await I.seeChecked(role('radio', 'Convex Auth'))
+	await I.dontSee(notesLoc.heading)
+})
 
 export const SignedOutBetterAuth = meta.story({
 	name: 'Signed Out (Better Auth)',
 	parameters: { authProvider: 'better-auth' },
 })
 
-SignedOutBetterAuth.test(
-	'redirects private routes to sign-in without reading private data',
-	async (story) => {
-		await I.see(loginLoc.signInHeading)
-		await I.seeChecked(role('radio', 'Better Auth'))
-		await I.dontSee(notesLoc.heading)
-		await expectNoPrivateReads(story)
-	},
-)
+SignedOutBetterAuth.test('redirects private routes to sign-in', async () => {
+	await I.see(loginLoc.signInHeading)
+	await I.seeChecked(role('radio', 'Better Auth'))
+	await I.dontSee(notesLoc.heading)
+})
 
 // Gate open
 

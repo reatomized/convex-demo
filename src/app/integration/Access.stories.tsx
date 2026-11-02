@@ -1,18 +1,19 @@
 import type { Id } from '#convex/_generated/dataModel'
 import type { ConvexStoryParameters } from '@reatomized/convex-storybook'
 
-import { atom, wrap } from '@reatom/core'
+import { atom } from '@reatom/core'
 import { ConvexError } from 'convex/values'
 
 import preview from '#.storybook/preview'
-import { inStoryFrame } from '#.storybook/storyFrame'
 import { App } from '#app/App'
 import { api } from '#convex/_generated/api.js'
+import { loginLoc, withLoginPage } from '#pages/login/testing'
+import { notesLoc, withNotesPage } from '#pages/notes/testing'
 import { teamLoc as loc } from '#pages/team/testing'
-import { deployment, storyIdentity } from '#shared/mocks/convexDeployment'
-import { button, createActor, text } from '#shared/test'
+import { ALEX, deployment, storyIdentity } from '#shared/mocks/convexDeployment'
+import { button, createActor, link, text } from '#shared/test'
 
-const I = createActor()
+const I = createActor().extend(withLoginPage).extend(withNotesPage)
 
 type Member = {
 	_id: Id<'members'>
@@ -100,22 +101,28 @@ export default meta
 
 export const WaitsForApproval = meta.story({ name: 'Waits For Approval' })
 
-WaitsForApproval.test(
-	'opens the team space once the admin approves',
-	inStoryFrame(async ({ provider }) => {
-		await wrap(I.see(loc.waitingHeading.wait()))
-		await wrap(I.see(text('The admin will approve alex@example.com.')))
+WaitsForApproval.test('opens the team space once the admin approves', async () => {
+	await I.see(loc.waitingHeading.wait())
+	await I.see(text('The admin will approve alex@example.com.'))
 
-		// The admin signs in on the same device and approves the account.
-		provider.identity.set(asOlga)
-		await wrap(I.click(loc.approve(alex.email).wait()))
-		await wrap(I.see(text(alex.email).within(loc.approved).wait()))
+	await I.signOut(alex.email)
+	await I.see(loginLoc.signInHeading.wait())
+	await I.chooseProvider('Better Auth')
+	await I.signUp({ email: olga.email, password: 'admin-password' })
+	await I.see(notesLoc.heading.wait())
+	await I.click(link('Team'))
+	await I.click(loc.approve(alex.email).wait())
+	await I.see(text(alex.email).within(loc.approved).wait())
 
-		provider.identity.set(asAlex)
-		await wrap(I.see(loc.spaceHeading.wait()))
-		await wrap(I.dontSee(loc.accounts))
-	}),
-)
+	await I.signOut(olga.email)
+	await I.see(loginLoc.signInHeading.wait())
+	await I.chooseProvider('Convex Auth')
+	await I.signIn(ALEX)
+	await I.see(notesLoc.heading.wait())
+	await I.click(link('Team'))
+	await I.see(loc.spaceHeading.wait())
+	await I.dontSee(loc.accounts)
+})
 
 export const RequestsAccess = meta.story({
 	name: 'Requests Access',
@@ -130,7 +137,7 @@ RequestsAccess.test('puts the account on the approval list', async () => {
 
 export const AdminManagesAccounts = meta.story({
 	name: 'Admin Manages Accounts',
-	parameters: { convex: { identity: asOlga } },
+	parameters: { authProvider: 'better-auth', convex: { identity: asOlga } },
 })
 
 AdminManagesAccounts.test('approves a waiting account and revokes an approved one', async () => {

@@ -48,7 +48,8 @@ PaginatesNotes.test('shows an added note first', async () => {
 export const ShowsConnectionState = meta.story({ name: 'Shows Connection State' })
 
 // Reconnects and token refreshes are the client's job, covered by its parity
-// tests; the app only shows what the client reports.
+// tests; the app only shows what the client reports. These infrastructure tests
+// inject events with no UI control. User journeys use actor-only tests above.
 ShowsConnectionState.test(
 	'tells the user while the connection is down',
 	inStoryFrame(async ({ convex }) => {

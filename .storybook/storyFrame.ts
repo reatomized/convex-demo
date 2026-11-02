@@ -93,10 +93,10 @@ export const storyFrame = ({ loaded }: { loaded: Record<string, unknown> }): Roo
 }
 
 /**
- * Runs a story test body in the frame its story renders with, so the test
- * reads and writes the state the UI shows, and hands it the story's Convex
- * fakes. A continuation stays in the frame only after awaiting a promise from
- * `wrap(...)`.
+ * Internal infrastructure helper for tests that must read or write atoms.
+ * Actor-only story tests need no frame wrapper. Use UI interactions for user
+ * journeys; reserve this for events with no UI control, such as connection loss.
+ * Continuations stay in the frame after awaiting `wrap(...)`.
  */
 export const inStoryFrame =
 	(fn: (fake: ConvexStoryFake) => Promise<void>) =>

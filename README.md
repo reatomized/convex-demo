@@ -151,19 +151,24 @@ Reatom frame per story in a loader, and inside it calls `convexStory` from
 `@reatomized/convex-storybook`, which builds a fake client and a fake auth
 library from the story's `parameters.convex`. The frame setup puts them in
 `backendAtom`, the atom `main.tsx` fills with the real backend. Handlers
-answer the app's functions by reference, so a renamed function fails the
-typecheck:
+answer the app's functions by reference in `parameters.convex.setup`.
+Story tests use Kahraman actors and assert visible UI, as in this excerpt
+from the seeded Access stories:
 
 ```tsx
-parameters: {
-	convex: {
-		identity: storyIdentity('convex-auth', 'alex@example.com'),
-		setup: ({ convex }) => {
-			convex.handleQuery(api.access.viewer, (_args, { identity }) => accessOf(identity))
-			convex.handleMutation(api.access.approve, ({ memberId }) => approve(memberId))
-		},
+export const AdminManagesAccounts = meta.story({
+	parameters: {
+		authProvider: 'better-auth',
+		convex: { identity: storyIdentity('better-auth', 'olga@example.com') },
 	},
-},
+})
+
+AdminManagesAccounts.test('approves a waiting account', async () => {
+	await I.see(loc.spaceHeading.wait())
+	await I.click(button('Approve: alex@example.com'))
+	await I.see(text('alex@example.com').within(loc.approved).wait())
+	await I.dontSee(text('alex@example.com').within(loc.pending))
+})
 ```
 
 Query handlers run inside computeds: a mutation handler that writes the atoms
@@ -171,9 +176,10 @@ they read updates every query that depends on them, as a deployment would.
 `src/shared/mocks/convexDeployment.ts` keeps accounts and notes that way, and
 `src/app/integration/Access.stories.tsx` the team space's members. A story that
 calls a function without a handler fails, even when the app catches the error.
-Reconnects, token refreshes and query sets are the client's concern, covered by
-its own parity tests, so stories set what the client reports
-(`convex.connected`, `convex.isRefreshingAuth`) instead.
+Actor-only tests need no frame wrapper. Model and atom assertions belong in
+unit tests. Reconnects, token refreshes and query sets are covered by the
+client's parity tests. The connection-banner infrastructure tests inject those
+external events into the fake and assert the resulting UI.
 
 **Functions.** `convex-test` runs the functions in `convex/` against an
 in-memory database, with identities set per call.

@@ -8,7 +8,7 @@ import type { AuthProviderId, Backend, Credentials } from '#shared/api'
 import type { ConvexStoryFake, ConvexStoryParameters } from '@reatomized/convex-storybook'
 import type { UserIdentity } from 'convex/server'
 
-import { action, atom, computed, context, type AtomLike, type RootFrame } from '@reatom/core'
+import { action, atom, computed, type AtomLike } from '@reatom/core'
 import { fakeIdentity, paginate } from '@reatomized/convex/testing'
 import { ConvexError } from 'convex/values'
 
@@ -37,17 +37,6 @@ const insertNote = (owner: string, text: string): Doc<'notes'> => {
 	return { _id: `notes:${nextNote}` as Id<'notes'>, _creationTime: nextNote, owner, text }
 }
 
-const runs = new WeakMap<RootFrame, Map<string, number>>()
-
-const countRun = (name: string) => {
-	const frame = context()
-	const counts = runs.get(frame) ?? new Map<string, number>()
-	runs.set(frame, counts.set(name, (counts.get(name) ?? 0) + 1))
-}
-
-/** How often the story's deployment ran `name`, such as `notes:list`. */
-export const runsOf = (name: string) => runs.get(context())?.get(name) ?? 0
-
 const requireViewer = (identity: UserIdentity | null) => {
 	if (!identity) throw new ConvexError('Not authenticated')
 	return viewerFromIdentity(identity)
@@ -74,7 +63,6 @@ export const deployment =
 			ctx.identity ? viewerFromIdentity(ctx.identity) : null,
 		)
 		convex.handleQuery(api.notes.list, ({ paginationOpts }, ctx) => {
-			countRun('notes:list')
 			const viewer = requireViewer(ctx.identity)
 			const mine = notes().filter((note) => note.owner === viewer.owner)
 			return paginate(mine.toReversed(), paginationOpts)

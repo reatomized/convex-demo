@@ -190,12 +190,15 @@ server does. Pass `deployment({ notes: [...] })` to seed notes, or compose it
 with more handlers, as `Access.stories.tsx` does for the team space. Atom state
 is per frame, so every story starts from its own seed.
 
-A test reaches the fakes through `inStoryFrame((fake) => ...)`, which also runs
-it in the story's frame: `fake.provider.identity.set(...)` signs in as someone
-else, `fake.convex.connected.set(false)` reports a dropped connection,
-`fake.convex.isRefreshingAuth.set(true)` a token refresh. `runsOf('notes:list')`
-counts how often the deployment ran a function, for asserting that a gate kept
-private data unread.
+Story tests normally stay at the UI boundary. Use Kahraman actors to click,
+type, and assert visible headings, messages, and lists. For example, the access
+gate test clicks `Approve: alex@example.com` and asserts that Alex appears under
+Approved. It does not read atoms or call app actions directly.
+
+Actor-only tests need no frame wrapper. `inStoryFrame` is an internal helper
+only for infrastructure tests that read or write atoms, such as injecting a
+connection change that has no UI control. Authentication journeys use the
+sign-in and sign-out UI. Model and atom assertions belong in unit tests.
 
 A function without a handler fails the story, even when the app catches the
 error and renders something plausible.
