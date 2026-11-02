@@ -1,16 +1,17 @@
 # Reatom Convex Auth
 
-An experiment in binding [Convex](https://convex.dev) to
-[Reatom](https://github.com/reatom/reatom) v1001, built on the
+A [Convex](https://convex.dev) app whose client state lives in
+[Reatom](https://github.com/reatom/reatom) v1001 atoms, built on the
 [Karkas](https://github.com/apphane-dev/karkas) stack:
 
-- `packages/reatom-convex`: a Reatom binding that covers what `convex/react`
-  does, with state in atoms instead of hooks. See
-  [Compared with convex/react](#compared-with-convexreact).
+- The app runs on [`@reatomized/convex`](https://github.com/reatomized/convex),
+  and its stories on `@reatomized/convex/testing` through
+  `@reatomized/convex-storybook`. See [Testing](#testing).
 - Convex Auth and better-auth on one deployment, behind one session model.
   See [Auth providers](#auth-providers).
-- `packages/bench`: a browser benchmark of the binding against convex/react,
-  rendered by @reatom/react and @reatom/jsx. See
+- `packages/bench`: a browser benchmark of `packages/reatom-convex`, the
+  binding over `convex/browser` this repository started with, against
+  convex/react, rendered by @reatom/react and @reatom/jsx. See
   [packages/bench/README.md](packages/bench/README.md).
 
 ## Stack
@@ -92,12 +93,13 @@ The sign-in page has an "Auth provider" radio group: Convex Auth
 and password). The choice lives in localStorage and stays fixed while signed
 in. Each provider has its own accounts, so the same email can exist twice.
 
-Both providers run on one deployment. Each library sits behind an adapter in
-`src/shared/api/auth/` that exposes a session atom, sign-in/up/out, and a token
-fetcher. `src/entities/session` hands the active adapter's token to Convex and
-reports `authenticated` only after the backend accepts it. The private notes
-page renders only in that state, so its Convex subscriptions never start for a
-signed-out user.
+Both providers run on one deployment. `createBackend` in
+`src/shared/api/createBackend.ts` builds the Convex client, both libraries
+through `@reatomized/convex/convex-auth` and `@reatomized/convex/better-auth`,
+and a `reatomAuthState` that follows the selected one. `main.tsx` puts it in
+`backendAtom` at startup. `src/entities/session` reports `authenticated` only
+after the backend accepts the library's token. The private pages render only in
+that state, so their queries never run for a signed-out user.
 
 On the backend, both libraries sign RS256 JWTs with the same issuer
 (`CONVEX_SITE_URL`) and audience (`convex`). Convex checks a token against the
@@ -111,34 +113,77 @@ and `convex/auth.config.ts` lists a single provider. better-auth is mounted at
 
 ## Compared with convex/react
 
-The binding in `packages/reatom-convex/src/reatomConvex.ts` covers what the
-official React hooks do. It keeps the state in atoms, so routes, loaders and
-tests can read it without a component tree.
+The app reads Convex through `backend().convex`, a `reatomConvexClient`. Its
+state is in atoms, so routes, loaders and tests read it without a component
+tree.
 
-| convex/react                             | Binding                                                                  |
-| ---------------------------------------- | ------------------------------------------------------------------------ |
-| `useQuery(q, args \| "skip")`            | `convex.query(q, () => args \| 'skip', name)`: `data`, `error`, `status` |
-| `usePaginatedQuery`                      | `convex.paginatedQuery(q, () => args, { initialNumItems }, name)`        |
-| `usePreloadedQuery`                      | `convex.preloadedQuery(preloaded, name)`                                 |
-| `useMutation(m).withOptimisticUpdate(u)` | `convex.mutation(m, name, { optimisticUpdate: u })`                      |
-| `useAction`                              | `convex.action(a, name)`                                                 |
-| `useConvexAuth()`                        | `convex.serverAuthenticated`, `convex.isRefreshingAuth`                  |
-| `useConvexConnectionState`               | `convex.connectionState`                                                 |
-| `useConvex`                              | `convex.client`                                                          |
+| convex/react                             | @reatomized/convex                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------- |
+| `useQuery(q, args)`                      | `convex.query(q, args)`: `data`, `error`, `status` atoms            |
+| `usePaginatedQuery`                      | `convex.paginatedQuery(q, args, { initialNumItems })`               |
+| `useMutation(m).withOptimisticUpdate(u)` | `convex.mutation(m, args, { optimisticUpdate: u })`                 |
+| `useAction`                              | `convex.action(a, args)`                                            |
+| `useConvexAuth()`                        | `reatomAuthState(convex, provider)`: `status`, `isLoading` and more |
+| `useConvexConnectionState`               | `convex.connectionState`                                            |
 
-Query errors land in `.error()` and never reach an error boundary. A
-subscription lives while something reads its atom, not while a component is
-mounted. Gating is done by routes reading `sessionStatus` instead of
-`<Authenticated>`. The pagination helpers from `convex/react` work with the
-binding's optimistic updates: the notes page adds notes through `insertAtTop`.
+Query errors land in `error()` and never reach an error boundary. A query is
+subscribed while something reads its atoms, not while a component is mounted.
+Routes gate on `sessionStatus` instead of `<Authenticated>`. The pagination
+helpers from `convex/react` work with the client's optimistic updates: the
+notes page adds notes through `insertAtTop`.
 
-`mise run bench` measures convex/react against the binding rendered by
-@reatom/react and by @reatom/jsx. Single queries, mutations and pagination
-come out within a few tenths of a millisecond. With 1000 subscriptions at
-once, @reatom/react takes 1.25× as long to mount and 2.2× to unmount;
-@reatom/jsx takes 1.1× and 1.2×, and updates 1000 readers of one query about
-3× faster. See
+`mise run bench` measures convex/react against the prototype binding in
+`packages/reatom-convex`, see
 [packages/bench/README.md](packages/bench/README.md).
+
+## Testing
+
+Three layers, each against what it can prove:
+
+| Layer      | Runs                                          | Proves                                     |
+| ---------- | --------------------------------------------- | ------------------------------------------ |
+| UI         | Stories on a fake client, `mise run test:run` | What a user sees and does, per state       |
+| Functions  | `convex/*.test.ts` on `convex-test`           | Server rules: owners, access, validation   |
+| End to end | `mise run convex:smoke`, `mise run e2e:real`  | The real client, auth libraries and server |
+
+**UI.** Stories never touch a deployment. `.storybook/storyFrame.ts` starts a
+Reatom frame per story in a loader, and inside it calls `convexStory` from
+`@reatomized/convex-storybook`, which builds a fake client and a fake auth
+library from the story's `parameters.convex`. The frame setup puts them in
+`backendAtom`, the atom `main.tsx` fills with the real backend. Handlers
+answer the app's functions by reference, so a renamed function fails the
+typecheck:
+
+```tsx
+parameters: {
+	convex: {
+		identity: storyIdentity('convex-auth', 'alex@example.com'),
+		setup: ({ convex }) => {
+			convex.handleQuery(api.access.viewer, (_args, { identity }) => accessOf(identity))
+			convex.handleMutation(api.access.approve, ({ memberId }) => approve(memberId))
+		},
+	},
+},
+```
+
+Query handlers run inside computeds: a mutation handler that writes the atoms
+they read updates every query that depends on them, as a deployment would.
+`src/shared/mocks/convexDeployment.ts` keeps accounts and notes that way, and
+`src/app/integration/Access.stories.tsx` the team space's members. A story that
+calls a function without a handler fails, even when the app catches the error.
+Reconnects, token refreshes and query sets are the client's concern, covered by
+its own parity tests, so stories set what the client reports
+(`convex.connected`, `convex.isRefreshingAuth`) instead.
+
+**Functions.** `convex-test` runs the functions in `convex/` against an
+in-memory database, with identities set per call.
+
+**End to end.** With `convex:dev` and `dev` running:
+
+```bash
+mise run convex:smoke  # both providers sign up and read their own notes over HTTP
+mise run e2e:real      # the same journeys in Chromium, including a reload
+```
 
 ## Validation
 
@@ -149,16 +194,5 @@ coverage, architecture, Fallow, build, tree-shaking):
 mise run validate
 ```
 
-For fast feedback on staged files, prefer `hk check` / `hk fix`.
-
-`validate` never touches a real backend. Stories and unit tests run the real
-Convex client against an in-process server that speaks Convex's websocket
-protocol (`packages/convex-fake-server/src/fakeConvexServer.ts`, with app data in
-`convexBackend.ts`). better-auth's real client talks to MSW handlers, and
-`convex-test` covers the backend functions.
-With `convex:dev` and `dev` running, two more checks hit the real thing:
-
-```bash
-mise run convex:smoke  # both providers sign up and read their own notes over HTTP
-mise run e2e:real      # the same journeys in Chromium, including a reload
-```
+For fast feedback on staged files, prefer `hk check` / `hk fix`. `validate`
+never touches a real backend.

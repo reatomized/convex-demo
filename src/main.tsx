@@ -8,6 +8,8 @@ import { createRoot } from 'react-dom/client'
 
 import { App } from '#app/App.tsx'
 import { startBrowserMocking } from '#app/mocks/browser'
+import { authProvider } from '#entities/session'
+import { backendAtom, createBackend } from '#shared/api'
 import { css } from '#styled-system/css'
 
 import { rootFrame } from './setup'
@@ -20,6 +22,7 @@ assert(root, 'Root element not found')
 root.classList.add(css({ colorPalette: 'indigo' }))
 
 rootFrame.run(() => {
+	backendAtom.set(createBackend(authProvider))
 	themePreferenceAtom.resolved.subscribe((theme) => {
 		document.documentElement.classList.toggle('dark', theme === 'dark')
 	})

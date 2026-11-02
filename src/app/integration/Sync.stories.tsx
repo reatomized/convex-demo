@@ -1,9 +1,12 @@
-import { expect, waitFor } from 'storybook/test'
+import { wrap } from '@reatom/core'
+import { ConvexError } from 'convex/values'
 
 import preview from '#.storybook/preview'
+import { inStoryFrame } from '#.storybook/storyFrame'
 import { App } from '#app/App'
+import { api } from '#convex/_generated/api.js'
 import { notesLoc, withNotesPage } from '#pages/notes/testing'
-import { fakeConvexBackend } from '#shared/mocks/convexBackend'
+import { deployment } from '#shared/mocks/convexDeployment'
 import { button, createActor, role, text } from '#shared/test'
 
 const I = createActor().extend(withNotesPage)
@@ -14,7 +17,11 @@ const seedNotes = Array.from({ length: 12 }, (_, index) => `Seeded note ${index 
 const meta = preview.meta({
 	title: 'Integration/Sync',
 	component: App,
-	parameters: { layout: 'fullscreen', authenticated: true, initialPath: 'notes', seedNotes },
+	parameters: {
+		layout: 'fullscreen',
+		initialPath: 'notes',
+		convex: { setup: deployment({ notes: seedNotes }) },
+	},
 	loaders: [(ctx) => I.init(ctx)],
 })
 
@@ -32,41 +39,55 @@ PaginatesNotes.test('loads ten notes, then the rest on demand', async () => {
 	await I.waitExit(button('Load more'))
 })
 
-export const AddsNotesOffline = meta.story({ name: 'Adds Notes Offline' })
+PaginatesNotes.test('shows an added note first', async () => {
+	await I.addNote('Fresh note')
+	const list = await I.see(notesLoc.list)
+	await I.see(text('Fresh note').within(list))
+})
 
-AddsNotesOffline.test(
-	'shows a note added offline at once and confirms it after reconnecting',
-	async () => {
-		await I.seeNote('Seeded note 12')
-		fakeConvexBackend.current.server.setOnline(false)
-		await I.see(role('status', /Connection lost/).wait())
+export const ShowsConnectionState = meta.story({ name: 'Shows Connection State' })
 
-		await I.fill(notesLoc.newNote, 'Written offline')
-		await I.click(button('Add note'))
-		// The optimistic update renders it while the mutation waits for the socket.
-		await I.seeNote('Written offline')
-		await I.see(button('Adding note'))
-
-		// Back online once the client retries, not during its reconnect backoff.
-		const { server } = fakeConvexBackend.current
-		await waitFor(() => expect(server.pendingConnections()).toBe(1), { timeout: 5000 })
-		server.setOnline(true)
-		await I.waitExit(button('Adding note'))
-		await I.waitExit(role('status', /Connection lost/))
-		await I.seeNote('Written offline')
-	},
+// Reconnects and token refreshes are the client's job, covered by its parity
+// tests; the app only shows what the client reports.
+ShowsConnectionState.test(
+	'tells the user while the connection is down',
+	inStoryFrame(async ({ convex }) => {
+		await wrap(I.seeNote('Seeded note 12'))
+		convex.connected.set(false)
+		await wrap(I.see(role('status', /Connection lost/).wait()))
+		convex.connected.set(true)
+		await wrap(I.waitExit(role('status', /Connection lost/)))
+	}),
 )
 
-export const RefreshesExpiredToken = meta.story({ name: 'Refreshes Expired Token' })
+ShowsConnectionState.test(
+	'tells the user while the session refreshes',
+	inStoryFrame(async ({ convex }) => {
+		await wrap(I.seeNote('Seeded note 12'))
+		convex.isRefreshingAuth.set(true)
+		await wrap(I.see(role('status', 'Refreshing session').wait()))
+		convex.isRefreshingAuth.set(false)
+		await wrap(I.waitExit(role('status', 'Refreshing session')))
+		await wrap(I.seeNote('Seeded note 12'))
+	}),
+)
 
-RefreshesExpiredToken.test('keeps the session when the server expires the token', async () => {
-	await I.seeNote('Seeded note 12')
-	const backend = fakeConvexBackend.current
-	backend.server.expireAuth()
-	await waitFor(() => expect(backend.subscriptionCount('notes:list')).toBe(0))
-	// The client fetched a fresh token and re-subscribed with it.
-	await waitFor(() => expect(backend.subscriptionCount('notes:list')).toBe(1))
-	await I.waitExit(role('status', 'Refreshing session'))
-	await I.seeNote('Seeded note 12')
-	await I.dontSee(text('The backend rejected this session'))
+export const NotesFailToLoad = meta.story({
+	name: 'Notes Fail To Load',
+	parameters: {
+		convex: {
+			setup: (fake, context) => {
+				deployment()(fake, context)
+				fake.convex.handleQuery(api.notes.list, () => {
+					throw new ConvexError('Notes are unavailable')
+				})
+			},
+		},
+	},
+})
+
+NotesFailToLoad.test('shows the error the server sent', async () => {
+	await I.see(role('alert').wait())
+	await I.see(text('Could not load notes'))
+	await I.see(text(/Notes are unavailable/))
 })
