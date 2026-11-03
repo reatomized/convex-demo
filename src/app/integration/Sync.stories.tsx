@@ -6,7 +6,7 @@ import { inStoryFrame } from '#.storybook/storyFrame'
 import { App } from '#app/App'
 import { api } from '#convex/_generated/api.js'
 import { notesLoc, withNotesPage } from '#pages/notes/testing'
-import { deployment } from '#shared/mocks/convexDeployment'
+import { deployment, heldWrites } from '#shared/mocks/convexDeployment'
 import { button, createActor, role, text } from '#shared/test'
 
 const I = createActor().extend(withNotesPage)
@@ -44,6 +44,26 @@ PaginatesNotes.test('shows an added note first', async () => {
 	const list = await I.see(notesLoc.list)
 	await I.see(text('Fresh note').within(list))
 })
+
+export const ShowsPendingNote = meta.story({ name: 'Shows Pending Note' })
+
+// The server's answer has no UI control, so the test holds the deployment's
+// write; the note shows through the page's optimistic update meanwhile.
+ShowsPendingNote.test(
+	'shows an added note before the server confirms it',
+	inStoryFrame(async () => {
+		await wrap(I.seeNote('Seeded note 12'))
+		let confirm!: () => void
+		heldWrites.set(new Promise<void>((resolve) => (confirm = resolve)))
+		await wrap(I.fill(notesLoc.newNote, 'Pending note'))
+		await wrap(I.click(button('Add note')))
+		await wrap(I.see(button('Adding note').wait()))
+		await wrap(I.seeNote('Pending note'))
+		confirm()
+		await wrap(I.waitExit(button('Adding note')))
+		await wrap(I.seeNote('Pending note'))
+	}),
+)
 
 export const ShowsConnectionState = meta.story({ name: 'Shows Connection State' })
 

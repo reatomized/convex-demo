@@ -124,7 +124,9 @@ that returns a mutation's arguments.
 | `useQuery(q, args)`                      | `atom(args).extend(withConvexQuery(convex, q))`: `data`, `error`, `status`      |
 | `usePaginatedQuery`                      | `atom(args).extend(withConvexPaginatedQuery(convex, q, { initialNumItems }))`   |
 | `useMutation(m).withOptimisticUpdate(u)` | `action(toArgs).extend(withConvexMutation(convex, m, { optimisticUpdate: u }))` |
+| `insertAtTop` and the other helpers      | `updateQuery(pagesAtom, (page, args, { first, last }) => page)`                 |
 | `useAction`                              | `action(toArgs).extend(withConvexAction(convex, a))`                            |
+| `useConvex().query(q, args)`             | `action(toArgs).extend(withConvexQuery(convex, q))`                             |
 | `useConvexAuth()`                        | `reatomAuthState(convex, provider)`: `status`, `isLoading` and more             |
 | `useConvexConnectionState`               | `convex.connectionState`                                                        |
 
@@ -133,9 +135,9 @@ methods are the same calls without the atom or action around them.
 
 Query errors land in `error()` and never reach an error boundary. A query is
 subscribed while something reads its atoms, not while a component is mounted.
-Routes gate on `sessionStatus` instead of `<Authenticated>`. The pagination
-helpers from `convex/react` work with the client's optimistic updates: the
-notes page adds notes through `insertAtTop`.
+Routes gate on `sessionStatus` instead of `<Authenticated>`. The notes page
+adds a note optimistically through `updateQuery`, which puts it first in the
+list's first page, as `insertAtTop` does.
 
 `mise run bench` measures convex/react against @reatomized/convex, with models
 that call the client and models built with its extensions, see
