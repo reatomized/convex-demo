@@ -41,7 +41,7 @@
 		"@icons-pack/react-simple-icons": "^13.13.0",
 		"@reatom/core": "^1001.3.0",
 		"@reatom/react": "^1001.0.1",
-		"@reatomized/convex": "^0.4.0",
+		"@reatomized/convex": "https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178",
 		"better-auth": "1.6.33",
 		"convex": "^1.49.0",
 		"idb-keyval": "^6.2.1",

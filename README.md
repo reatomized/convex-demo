@@ -132,8 +132,8 @@ Routes gate on `sessionStatus` instead of `<Authenticated>`. The pagination
 helpers from `convex/react` work with the client's optimistic updates: the
 notes page adds notes through `insertAtTop`.
 
-`mise run bench` measures convex/react against the prototype binding in
-`packages/reatom-convex`, see
+`mise run bench` measures convex/react against @reatomized/convex, with models
+that call the client and models built with its extensions, see
 [packages/bench/README.md](packages/bench/README.md).
 
 ## Testing

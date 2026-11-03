@@ -30,8 +30,8 @@ importers:
         specifier: ^1001.0.1
         version: 1001.0.1(@reatom/core@1001.3.0)(react@19.3.1)(react-dom@19.3.1(react@19.3.1))
       '@reatomized/convex':
-        specifier: ^0.4.0
-        version: 0.4.0(@reatom/core@1001.3.0)(convex@1.49.0(react@19.3.1))
+        specifier: https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178
+        version: https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178
       better-auth:
         specifier: 1.6.33
         version: 1.6.33(@vitest/browser@4.1.10)(msw@2.15.0(typescript@6.0.2))(playwright@1.64.1)(react@19.3.1)(react-dom@19.3.1(react@19.3.1))(vitest@4.1.10(@edge-runtime/vm@5.0.0)(@types/node@24.19.2)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.7.0)))
@@ -156,6 +156,9 @@ importers:
       '@reatom/react':
         specifier: ^1001.0.1
         version: 1001.0.1(@reatom/core@1001.3.0)(react@19.3.1)(react-dom@19.3.1(react@19.3.1))
+      '@reatomized/convex':
+        specifier: https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178
+        version: https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178
       convex:
         specifier: 1.49.0
         version: 1.49.0(react@19.3.1)
@@ -168,9 +171,6 @@ importers:
       react-dom:
         specifier: ^19.2.7
         version: 19.3.1(react@19.3.1)
-      reatom-convex:
-        specifier: workspace:*
-        version: link:../reatom-convex
     devDependencies:
       '@vitejs/plugin-react':
         specifier: ^6.0.5
@@ -2249,6 +2249,10 @@ packages:
     peerDependencies:
       '@reatom/core': ^1001.3.0
       convex: ^1.49.0
+
+  '@reatomized/convex@https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178':
+    resolution: {integrity: sha512-C1BpOvphV/vGfUjT15J8SYX9iRxi0msKPTkIa7VoxKThrv1iG/QVebpdnpRaoK+KfL8dqxfpfm+PfSXo7GA79g==, tarball: https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178}
+    version: 0.4.0
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
     resolution: {integrity: sha512-ia3DwAs0OsMGS7+IConptSiyk9pEXkOx/AbJ2n/lAGxH3QkWQus1t8d7gnAT38FCU2sQu8lUbeR6AiZFv4JxaA==}
@@ -7556,6 +7560,8 @@ snapshots:
     dependencies:
       '@reatom/core': 1001.3.0
       convex: 1.49.0(react@19.3.1)
+
+  '@reatomized/convex@https://pkg.pr.new/reatomized/convex/@reatomized/convex@8d5b178': {}
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
     optional: true

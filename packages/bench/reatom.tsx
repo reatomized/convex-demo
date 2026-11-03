@@ -2,7 +2,7 @@ import { reatomComponent, reatomContext } from '@reatom/react'
 
 import { counters, type Binding, type Note } from './fixture'
 import { reactView } from './reactView'
-import { reatomModels, type ItemModel } from './reatomModels'
+import { reatomModels, type Calls, type ItemModel } from './reatomModels'
 
 const Item = reatomComponent(({ id, model }: { id: number; model: ItemModel }) => {
 	counters.renders++
@@ -21,11 +21,11 @@ const Notes = reatomComponent(
 	'Notes',
 )
 
-export const reatom: Binding = {
-	label: '@reatom/react',
+const reatomReact = (label: string, calls: Calls): Binding => ({
+	label,
 	commits: true,
 	create(server, container) {
-		const models = reatomModels(server)
+		const models = reatomModels(server, calls)
 		const view = reactView(container)
 		const provide = (node: React.ReactNode) =>
 			view.show(<reatomContext.Provider value={models.frame}>{node}</reatomContext.Provider>)
@@ -44,8 +44,11 @@ export const reatom: Binding = {
 			clear: view.clear,
 			close: () => {
 				view.dispose()
-				return models.client.close()
+				return models.close()
 			},
 		}
 	},
-}
+})
+
+export const reatom = reatomReact('@reatom/react', 'client')
+export const reatomExtensions = reatomReact('@reatom/react ext', 'extensions')
