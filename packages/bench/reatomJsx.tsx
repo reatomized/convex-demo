@@ -1,12 +1,12 @@
 /** @jsxImportSource @reatom/jsx */
 // @reatom/jsx has no keyed reconciliation: `key` would be an unused prop.
 // oxlint-disable react/jsx-key
-// The same binding rendered by @reatom/jsx: real DOM nodes, no virtual DOM.
+// The same models rendered by @reatom/jsx: real DOM nodes, no virtual DOM.
 // Components run once; bound values update the DOM directly.
 import { mount } from '@reatom/jsx'
 
 import { counters, type Binding, type Note } from './fixture'
-import { reatomModels, type ItemModel } from './reatomModels'
+import { reatomModels, type Calls, type ItemModel } from './reatomModels'
 
 const Item = ({ id, model }: { id: number; model: ItemModel }) => (
 	<i
@@ -24,14 +24,15 @@ const Notes = ({ notes }: { notes: () => Note[] }) => (
 	<ul>{() => notes().map((note) => <li>{note.text}</li>)}</ul>
 )
 
-export const reatomJsx: Binding = {
-	label: '@reatom/jsx',
+const reatomJsxBinding = (label: string, calls: Calls): Binding => ({
+	label,
 	commits: false,
 	create(server, container) {
-		const models = reatomModels(server)
+		const models = reatomModels(server, calls)
 		let unmount: (() => void) | undefined
 		const show = (build: () => Element) =>
 			models.frame.run(() => {
+				unmount?.()
 				unmount = mount(container, <div>{build()}</div>).unmount
 			})
 		const clear = () => {
@@ -64,8 +65,11 @@ export const reatomJsx: Binding = {
 			clear,
 			close: () => {
 				clear()
-				return models.client.close()
+				return models.close()
 			},
 		}
 	},
-}
+})
+
+export const reatomJsx = reatomJsxBinding('@reatom/jsx', 'client')
+export const reatomJsxExtensions = reatomJsxBinding('@reatom/jsx ext', 'extensions')

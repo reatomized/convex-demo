@@ -8,7 +8,7 @@ import type { AuthProviderId, Backend, Credentials } from '#shared/api'
 import type { ConvexStoryFake, ConvexStoryParameters } from '@reatomized/convex-storybook'
 import type { UserIdentity } from 'convex/server'
 
-import { action, atom, computed, type AtomLike } from '@reatom/core'
+import { action, atom, computed, wrap, type AtomLike } from '@reatom/core'
 import { fakeIdentity, paginate } from '@reatomized/convex/testing'
 import { ConvexError } from 'convex/values'
 
@@ -31,6 +31,13 @@ const accountKey = (provider: AuthProviderId, email: string) => `${provider}:${e
 const accounts = atom<ReadonlyMap<string, string>>(new Map<string, string>(), 'deployment.accounts')
 const notes = atom<readonly Doc<'notes'>[]>([], 'deployment.notes')
 let nextNote = 0
+
+/**
+ * While it holds a promise, `notes.add` waits for it before writing, like a
+ * server that has not answered yet. Stories set it to see what the user sees
+ * meanwhile.
+ */
+export const heldWrites = atom<Promise<void> | null>(null, 'deployment.heldWrites')
 
 const insertNote = (owner: string, text: string): Doc<'notes'> => {
 	nextNote += 1
@@ -71,9 +78,13 @@ export const deployment =
 			const { owner } = requireViewer(ctx.identity)
 			const trimmed = text.trim()
 			if (!trimmed) throw new ConvexError('Note text is required')
-			const note = insertNote(owner, trimmed)
-			notes.set((all) => [...all, note])
-			return note._id
+			const write = () => {
+				const note = insertNote(owner, trimmed)
+				notes.set((all) => [...all, note])
+				return note._id
+			}
+			const held = heldWrites()
+			return held ? wrap(held).then(write) : write()
 		})
 	}
 
