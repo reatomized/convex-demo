@@ -115,16 +115,21 @@ and `convex/auth.config.ts` lists a single provider. better-auth is mounted at
 
 The app reads Convex through `backend().convex`, a `reatomConvexClient`. Its
 state is in atoms, so routes, loaders and tests read it without a component
-tree.
+tree. The page models build their queries and mutations with the client's
+Reatom extensions: an atom whose state is a query's arguments, and an action
+that returns a mutation's arguments.
 
-| convex/react                             | @reatomized/convex                                                  |
-| ---------------------------------------- | ------------------------------------------------------------------- |
-| `useQuery(q, args)`                      | `convex.query(q, args)`: `data`, `error`, `status` atoms            |
-| `usePaginatedQuery`                      | `convex.paginatedQuery(q, args, { initialNumItems })`               |
-| `useMutation(m).withOptimisticUpdate(u)` | `convex.mutation(m, args, { optimisticUpdate: u })`                 |
-| `useAction`                              | `convex.action(a, args)`                                            |
-| `useConvexAuth()`                        | `reatomAuthState(convex, provider)`: `status`, `isLoading` and more |
-| `useConvexConnectionState`               | `convex.connectionState`                                            |
+| convex/react                             | @reatomized/convex                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------- |
+| `useQuery(q, args)`                      | `atom(args).extend(withConvexQuery(convex, q))`: `data`, `error`, `status`      |
+| `usePaginatedQuery`                      | `atom(args).extend(withConvexPaginatedQuery(convex, q, { initialNumItems }))`   |
+| `useMutation(m).withOptimisticUpdate(u)` | `action(toArgs).extend(withConvexMutation(convex, m, { optimisticUpdate: u }))` |
+| `useAction`                              | `action(toArgs).extend(withConvexAction(convex, a))`                            |
+| `useConvexAuth()`                        | `reatomAuthState(convex, provider)`: `status`, `isLoading` and more             |
+| `useConvexConnectionState`               | `convex.connectionState`                                                        |
+
+`convex.query(q, args)`, `convex.mutation(m, args)` and the other client
+methods are the same calls without the atom or action around them.
 
 Query errors land in `error()` and never reach an error boundary. A query is
 subscribed while something reads its atoms, not while a component is mounted.

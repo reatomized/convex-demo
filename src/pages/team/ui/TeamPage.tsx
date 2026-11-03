@@ -1,6 +1,6 @@
 import type { Id } from '#convex/_generated/dataModel'
 
-import { wrap, type Action, type AsyncExt } from '@reatom/core'
+import { wrap } from '@reatom/core'
 import { reatomComponent } from '@reatom/react'
 
 import { sessionUser } from '#entities/session'
@@ -10,7 +10,7 @@ import { Alert, Button, Heading, Skeleton, Text } from '#shared/components'
 import { styled } from '#styled-system/jsx'
 
 type Member = { _id: Id<'members'>; email: string }
-type MemberAction = Action<[Id<'members'>], Promise<void>> & AsyncExt<[Id<'members'>], void>
+type MemberAction = TeamPageModel['approve']
 
 const ErrorAlert = ({ title }: { title: string }) => (
 	<Alert.Root status="error" role="alert">

@@ -1,27 +1,26 @@
 import type { Id } from '#convex/_generated/dataModel'
 
-import { action, withAsync, wrap } from '@reatom/core'
+import { action, atom } from '@reatom/core'
+import { withConvexMutation, withConvexQuery } from '@reatomized/convex'
 
 import { api } from '#convex/_generated/api.js'
 import { backend } from '#shared/api'
 
 export const reatomTeamPage = () => {
 	const { convex } = backend()
-	const memberAction = (name: string, run: (memberId: Id<'members'>) => Promise<null>) =>
-		action(async (memberId: Id<'members'>) => {
-			await wrap(run(memberId))
-		}, `teamPage.${name}`).extend(withAsync())
+	const memberAction = (name: string, mutation: typeof api.access.approve) =>
+		action((memberId: Id<'members'>) => ({ memberId }), `teamPage.${name}`).extend(
+			withConvexMutation(convex, mutation),
+		)
 	return {
-		access: convex.query(api.access.viewer, {}),
+		access: atom({}, 'teamPage.access').extend(withConvexQuery(convex, api.access.viewer)),
 		// Read only for the admin, the one caller the server answers.
-		members: convex.query(api.access.members, {}),
-		requestAccess: action(async () => {
-			await wrap(convex.mutation(api.access.requestAccess, {}))
-		}, 'teamPage.requestAccess').extend(withAsync()),
-		approve: memberAction('approve', (memberId) =>
-			convex.mutation(api.access.approve, { memberId }),
+		members: atom({}, 'teamPage.members').extend(withConvexQuery(convex, api.access.members)),
+		requestAccess: action(() => {}, 'teamPage.requestAccess').extend(
+			withConvexMutation(convex, api.access.requestAccess),
 		),
-		revoke: memberAction('revoke', (memberId) => convex.mutation(api.access.revoke, { memberId })),
+		approve: memberAction('approve', api.access.approve),
+		revoke: memberAction('revoke', api.access.revoke),
 	}
 }
 

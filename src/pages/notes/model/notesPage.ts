@@ -1,4 +1,5 @@
-import { action, reatomForm, wrap } from '@reatom/core'
+import { action, atom, reatomForm, wrap } from '@reatom/core'
+import { withConvexMutation, withConvexPaginatedQuery, withConvexQuery } from '@reatomized/convex'
 import { insertAtTop } from 'convex/react'
 
 import { api } from '#convex/_generated/api.js'
@@ -8,30 +9,24 @@ export const NOTES_PAGE_SIZE = 10
 
 export const reatomNotesPage = () => {
 	const { convex } = backend()
-	const addNote = action(
-		(text: string) =>
-			convex.mutation(
-				api.notes.add,
-				{ text },
-				{
-					// Shows the note first until the server's list includes it.
-					optimisticUpdate: (localQueryStore) => {
-						const owner = localQueryStore.getQuery(api.viewer.current, {})?.owner
-						if (!owner) return
-						insertAtTop({
-							paginatedQuery: api.notes.list,
-							localQueryStore,
-							item: {
-								_id: `optimistic:${crypto.randomUUID()}` as never,
-								_creationTime: Date.now(),
-								owner,
-								text: text.trim(),
-							},
-						})
+	const addNote = action((text: string) => ({ text }), 'notesPage.addNote').extend(
+		withConvexMutation(convex, api.notes.add, {
+			// Shows the note first until the server's list includes it.
+			optimisticUpdate: (localQueryStore, { text }) => {
+				const owner = localQueryStore.getQuery(api.viewer.current, {})?.owner
+				if (!owner) return
+				insertAtTop({
+					paginatedQuery: api.notes.list,
+					localQueryStore,
+					item: {
+						_id: `optimistic:${crypto.randomUUID()}` as never,
+						_creationTime: Date.now(),
+						owner,
+						text: text.trim(),
 					},
-				},
-			),
-		'notesPage.addNote',
+				})
+			},
+		}),
 	)
 	const form = reatomForm(
 		{ text: '' },
@@ -45,9 +40,11 @@ export const reatomNotesPage = () => {
 		},
 	)
 	return {
-		notes: convex.paginatedQuery(api.notes.list, {}, { initialNumItems: NOTES_PAGE_SIZE }),
+		notes: atom({}, 'notesPage.notes').extend(
+			withConvexPaginatedQuery(convex, api.notes.list, { initialNumItems: NOTES_PAGE_SIZE }),
+		),
 		// The backend's view of the caller, independent of the client-side session.
-		viewer: convex.query(api.viewer.current, {}),
+		viewer: atom({}, 'notesPage.viewer').extend(withConvexQuery(convex, api.viewer.current)),
 		form,
 	}
 }
