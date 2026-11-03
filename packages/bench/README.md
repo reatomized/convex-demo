@@ -68,44 +68,48 @@ From [RESULTS.md](RESULTS.md), 1000 components where a scenario mounts many, on
 a 4-core cloud VM. Its times are about four times those of the Apple M4 Pro run
 of
 [0.3.0](https://github.com/reatomized/convex-demo/blob/226566179f762eb1c1eaf5ba7012e2a4d5d893f3/packages/bench/RESULTS.md),
-so compare ratios across runs, not milliseconds.
+so compare ratios across runs, not milliseconds. Repeated runs on this VM moved
+single medians by up to 15%.
 
 **The extensions against client calls:**
 
-- **@reatom/jsx: no measurable difference.** Per-message mount 50.4 ms against
-  52.6 ms, update all 9.33 against 9.41 ms, unmount 21.1 against 20.6 ms. The
-  interquartile ranges overlap on every row of both response shapes.
-- **@reatom/react: updates are even, mount and unmount cost more.** Update all
-  28.2 against 28.6 ms per-message. Mount is 98.7 against 79.5 ms and unmount
-  54.8 against 43.6 ms, about 20 µs and 11 µs per query, with interquartile
-  ranges that do not overlap. Coalesced responses point the same way (mount
-  98.6 against 81.7 ms, unmount 56.5 against 47.4 ms, update all 29.5 against
-  23.9 ms), with ranges that overlap.
+- **Mounting costs 15–30 µs more per query.** Per-message mount is 96.9 against
+  78.0 ms under @reatom/react and 50.7 against 35.7 ms under @reatom/jsx;
+  coalesced, 98.2 against 67.6 and 57.2 against 35.3 ms. An extended item
+  builds its arguments atom, the computed that maps them to the client's entry,
+  and its `data` computed; a direct item reads the entry's atoms. A Node run
+  over the scripted server measures the same gap, about 11–14 µs per query.
+- **Updates cost 1–4 µs more per query.** Update all is 26.7 against 25.3 ms
+  per-message and 27.6 against 23.3 ms coalesced under @reatom/react, 9.41
+  against 7.89 and 8.92 against 7.58 ms under @reatom/jsx. `data` reads the
+  entry's result, so an update recomputes as many atoms; the extra cost is
+  checking the arguments computed.
+- **Unmount** is 52.9 against 41.3 ms under @reatom/react per-message and
+  within 2 ms in the other three cells.
 - **Single queries, mutations, optimistic updates and pagination stay within
-  0.15 ms of the plain columns.**
-- **Bundle.** The extension apps add 2.1–2.2 KiB gzip over the same apps on
+  0.1 ms of the plain columns.** The 20-transition burst varies more between
+  runs than between columns.
+- **Bundle.** The extension apps add 2.4–2.5 KiB gzip over the same apps on
   client calls: the extensions module and `withAsync` for the mutation.
 
-An extended atom creates its `query`, `data`, `status` and other atoms on first
-read, and `data` and `status` read the entry's result, so an update recomputes
-as many atoms as reading `convex.query(ref, args).data` does. Mounting adds
-the arguments atom and the computed that maps them to the entry.
+None of this shows on a page with a few dozen queries. Code that mounts
+hundreds of queries at once and needs every microsecond can read
+`convex.query(ref, args)` directly; both styles share the client's entries.
 
 **@reatomized/convex against convex/react:**
 
-- **Mounting 1000 queries with per-message responses: 197 ms for convex/react,
-  80 ms (0.40×) with @reatom/react, 53 ms (0.27×) with @reatom/jsx.**
+- **Mounting 1000 queries with per-message responses: 168 ms for convex/react,
+  78 ms (0.46×) with @reatom/react, 36 ms (0.21×) with @reatom/jsx.**
   convex/browser sends a query-set message per subscription and gets 1001
   transitions back. @reatomized/convex batches the changes of one microtask
   into one message, so the server answers twice.
-- **With coalesced responses that batching no longer matters,** and on this
-  machine both Reatom columns mount slower: 44 ms for convex/react, 82 ms
-  (1.86×) with @reatom/react and 60 ms (1.36×) with @reatom/jsx. The M4 Pro
-  run measured 1.18× and 0.52×.
+- **With coalesced responses that batching no longer matters,** and
+  @reatom/react mounts slower on this machine: 53 ms for convex/react, 68 ms
+  (1.27×) with @reatom/react and 35 ms (0.67×) with @reatom/jsx. The M4 Pro run
+  measured 1.18× and 0.52×.
 - **@reatom/react is slower when many components update at once:** update all
-  2.1–2.6×, shared mount and shared update 1.5–2.0×. @reatom/jsx is
-  0.3–0.85× on the same rows, so the cost is in `reatomComponent`, not the
-  client.
+  2.1×, shared mount and shared update 1.5–1.9×. @reatom/jsx is 0.3–0.7× on the
+  same rows, so the cost is in `reatomComponent`, not the client.
 - **Fewer renders.** Both Reatom columns render each item twice on mount,
   against three times for `useQuery`, and @reatom/react commits twice where
   convex/react commits three or four times.
@@ -114,8 +118,8 @@ the arguments atom and the computed that maps them to the entry.
   25.4 KiB in total, against 86.7 KiB for the convex/react one, because React
   is gone.
 
-None of this shows on a page with a few dozen queries. The differences matter
-when hundreds of subscriptions start, stop or update in one frame.
+The differences between the clients matter when hundreds of subscriptions
+start, stop or update in one frame.
 
 ## Limits
 
